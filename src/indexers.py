@@ -1,16 +1,16 @@
 # Copied from scorpio: base/indexer/indexers.py
 
-import requests
-from django.utils import timezone
-from elasticsearch.exceptions import NotFoundError
-from elasticsearch_dsl import Index, connections
-from electronbonder.client import ElectronBond
+import requests # Delete, probably
+from django.utils import timezone # Replace with lambda-friendly datetime
+from elasticsearch.exceptions import NotFoundError # Probably keep? Need elasticsearch
+from elasticsearch_dsl import Index, connections # Probably keep? Need elasticsearch
+from electronbonder.client import ElectronBond # Remove, not fetching data
 from rac_es.documents import (Agent, BaseDescriptionComponent, Collection,
-                              Object, Term)
+                              Object, Term) # Keep
 
-from scorpio import settings
+from scorpio import settings # Remove and replace with secrets in AWS SSM
 
-from .models import IndexRun, IndexRunError
+from .models import IndexRun, IndexRunError # Remove and replace with logging and SNS notifications
 
 OBJECT_TYPES = {
     "agent": Agent,
@@ -19,7 +19,8 @@ OBJECT_TYPES = {
     "term": Term
 }
 
-
+# Refactor: Delete. Not needed in data_index because it will use SNS notifications
+# instead of post requests to pisces
 def update_pisces(identifiers, action):
     try:
         resp = requests.post("/".join([
@@ -30,17 +31,19 @@ def update_pisces(identifiers, action):
     except requests.HTTPError as e:
         print("Error sending request to Pisces: {}".format(e.response.json()["detail"]))
 
-
+# Refactor: Delete? This isn't being used in the old script either.
 class ScorpioIndexError(Exception):
     pass
 
-
+# Refactor: Keep some of this logic in new code as part of DataIndexer
 class Indexer:
     """
     Main indexer class, which adds merged documents to the index or removes
     documents from the index.
     """
 
+    # Refactor: Still need to connect to ES and create index, but have to load elasticsearch 
+    # configs from somewhere else (not Django Settings). Don't need to connect to pisces.
     def __init__(self):
         connection_args = {'hosts': settings.ELASTICSEARCH['default']['hosts'], 'timeout': 60}
         if settings.ELASTICSEARCH['default'].get('api_key'):
@@ -50,6 +53,7 @@ class Indexer:
             BaseDescriptionComponent.init()
         self.pisces_client = ElectronBond(baseurl=settings.PISCES['baseurl'])
 
+    # Refactor: Data now comes pre-bundled in SQS message, so update data source.
     def prepare_updates(self, obj_type, doc_cls, clean):
         """Prepares objects to be indexed"""
         for obj in self.fetch_objects(obj_type, clean):
@@ -59,6 +63,7 @@ class Indexer:
             except Exception as e:
                 raise Exception("Error preparing streaming dict: {}".format(e))
 
+    # Refactor: I think keep this as is? Not sure about printing exception v. logging, though.
     def prepare_deletes(self, id_list):
         """Prepares objects to be deleted.
 
@@ -73,6 +78,7 @@ class Indexer:
             except Exception as e:
                 print(e)
 
+    # Refactor: Delete. Not needed since data is coming from SQS messages
     def fetch_objects(self, object_type, clean):
         """Returns data to be indexed."""
         try:
@@ -81,6 +87,8 @@ class Indexer:
         except Exception as e:
             raise Exception("Error fetching objects: {}".format(e))
 
+    # Refactor: Still need to add and delete documents to/from index using ES bulk indexing,
+    # but not involving Django or Pisces. SQS is batching them. Use SNS success/failure notification
     def add(self, object_type=None, clean=False, **kwargs):
         """Adds documents to index using ES bulk indexing."""
         object_types = [object_type] if object_type else OBJECT_TYPES
@@ -129,6 +137,7 @@ class Indexer:
         update_pisces(deleted_ids, "deleted")
         return deleted_ids
 
+    # Refactor: Delete this, I think?
     def reset(self, **kwargs):
         try:
             BaseDescriptionComponent._index.delete()
