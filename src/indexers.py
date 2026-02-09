@@ -54,6 +54,7 @@ class Indexer:
         self.pisces_client = ElectronBond(baseurl=settings.PISCES['baseurl'])
 
     # Refactor: Data now comes pre-bundled in SQS message, so update data source.
+    # It should already be normalized from data_transform, so don't need "clean"?
     def prepare_updates(self, obj_type, doc_cls, clean):
         """Prepares objects to be indexed"""
         for obj in self.fetch_objects(obj_type, clean):
