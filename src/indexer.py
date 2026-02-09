@@ -1,6 +1,8 @@
 # New data_index service logic
 # #!/usr/bin/env python3
 
+# TODO: Only use logger instead of print statements?
+
 import json
 import logging
 import traceback
@@ -26,7 +28,39 @@ OBJECT_TYPES = {
 }
 
 # SSM path for configs
-full_config_path = f"/{getenv('ENV')}/{getenv('APP_CONFIG_PATH')}"
+full_config_path = f"/{getenv('ENV')}/{getenv('APP_CONFIG_PATH')}"  # Is this correct?
+
+def get_config(ssm_parameter_path):
+    """Fetch config values from Parameter Store.
+
+    Args:
+        ssm_parameter_path (str): Path to parameters
+
+    Returns:
+        configuration (dict): all parameters found at the supplied path.
+    """
+    configuration = {}
+    try:
+        ssm_client = boto3.client(
+            'ssm',
+            region_name=getenv('AWS_DEFAULT_REGION', 'us-east-1'))
+
+        param_details = ssm_client.get_parameters_by_path(
+            Path=ssm_parameter_path,
+            Recursive=False,
+            WithDecryption=True)
+
+        for param in param_details.get('Parameters', []):
+            param_path_array = param.get('Name').split("/")
+            section_position = len(param_path_array) - 1
+            section_name = param_path_array[section_position]
+            configuration[section_name] = param.get('Value')
+        
+    except BaseException:
+        logging.error("Encountered an error loading config from SSM.")
+        traceback.print_exc()
+    finally:
+        return configuration
 
 class DataIndexer:
     """Indexes transformed metadata records into Elasticsearch."""
@@ -36,11 +70,23 @@ class DataIndexer:
         config = get_config(full_config_path)
 
         # Elasticsearch connection
+        # Doing my best to convert from Djano settings/configs, but could use a second look
+        hosts = config["ELASTICSEARCH_HOSTS"]
+        connection_args = {"hosts": hosts, "timeout": 60} # TODO: is this timeout still appropriate?
+        if config.get("ELASTICSEARCH_API_KEY"):
+            connection_args["api_key"] = config["ELASTICSEARCH_API_KEY"]
+        self.connection = connections.create_connection(**connection_args)
 
         # Ensure the index exists
+        if not Index(config.get("ELASTICSEARCH_INDEX")).exists():
+            BaseDescriptionComponent.init()
 
         # SNS Setup
-        pass
+        self.sns_topic = config.get("AWS_SNS_TOPIC")
+        self.sns_client = boto3.client(
+            "sns",
+            region_name=getenv("AWS_DEFAULT_REGION", "us-east-1")
+        )
 
     def run(self, event):
         """Main method that calls all other methods.
@@ -52,16 +98,6 @@ class DataIndexer:
         logger.info("Message batch received")
         pass
 
-    def get_config(ssm_parameter_path):
-        """Fetch config values from Parameter Store.
-
-        Args:
-            ssm_parameter_path (str): Path to parameters
-
-        Returns:
-            configuration (dict): all parameters found at the supplied path.
-        """
-        pass
     
     def process_message(self, record):
         """Parse SQS message data.
@@ -90,7 +126,7 @@ class DataIndexer:
         pass
 
     def deliver_success_notification(self):
-        """Send a message to an SNS topic when processesing completes successfully."""
+        """Send a message to an SNS topic when processing completes successfully."""
         # Not sure what level of data to include as part of success. Include ids for objects?
         pass
 
