@@ -96,7 +96,13 @@ class DataIndexer:
         """
 
         logger.info("Message batch received")
-        pass
+        
+        for record in event.get("Records", []):
+            try:
+                self.process_message(record)
+            except Exception as e:
+                logger.exception("Error processing record")
+                self.deliver_failure_notification(e)
 
     
     def process_message(self, record):
@@ -105,7 +111,17 @@ class DataIndexer:
         Args:
             record (dict): A single SQS message record.
         """
-        pass
+        try:
+            body = json.loads(record["body"])
+        except json.JSONDecodeError:
+            body = record["body"]
+
+        attributes = record.get("messageAttributes", {})
+
+        object_type = attributes.get("objectType", {}).get("stringValue")
+        
+        # Was thinking this would call the add or delete functions, but I'm
+        # not actually clear what data I'm able to/need to parse from these messages...
 
     def add(self, doc_cls, objects):
         """Bulk index documents into Elasticsearch.
