@@ -31,14 +31,8 @@ OBJECT_TYPES = {
 full_config_path = f"/{getenv('ENV')}/{getenv('APP_CONFIG_PATH')}"  # Is this correct?
 
 def get_config(ssm_parameter_path):
-    """Fetch config values from Parameter Store.
-
-    Args:
-        ssm_parameter_path (str): Path to parameters
-
-    Returns:
-        configuration (dict): all parameters found at the supplied path.
-    """
+    """Fetch config values from AWS Parameter Store by path."""
+    
     configuration = {}
     try:
         ssm_client = boto3.client(
@@ -67,6 +61,7 @@ class DataIndexer:
 
     def __init__(self):
         """Initialize connections, configs, and clients"""
+        
         config = get_config(full_config_path)
 
         # Elasticsearch connection
@@ -91,9 +86,6 @@ class DataIndexer:
     def run(self, event):
         """Main method that calls all other methods. Parses SQS messages, 
         performs indexing actions, and sends notifications.
-
-        Args:
-            event (dict): SQS event containing messages.
         """
 
         logger.info("Message batch received")
@@ -119,7 +111,11 @@ class DataIndexer:
                 self.deliver_failure_notification(e)
     
     def parse_batch(self, event):
-        """Parse SQS message data and group objects by type and action."""
+        """Parse SQS message data and group by object type and action.
+        
+        Supports batches with mixed object types. 
+        Merge lists contain full object dicts; delete lists contain es_ids.
+        """
         
         grouped = {}
         
@@ -151,7 +147,8 @@ class DataIndexer:
         return grouped
     
     def prepare_updates(self, doc_cls, objects):
-        """Prepares objects to be indexed"""
+        """Prepare documents for bulk indexing."""
+
         for obj in objects:
             doc = doc_cls(**obj["data"])
             try:
@@ -159,10 +156,12 @@ class DataIndexer:
             except Exception as e:
                 raise Exception("Error preparing streaming dict: {}".format(e)) # Use logger?
 
-    def prepare_deletes(self, id_list): # This doesn't delete by object type, it uses the BaseDecriptionComponent class like scorpio. Is that ok?
-        """Prepares objects to be deleted.
+    def prepare_deletes(self, id_list):
+        """Prepare document IDs for bulk deletion via BaseDescriptionComponent.
         
-        Ignores documents which cannot be found in the index."""
+        Ignores documents which cannot be found in the index.
+        """
+
         for obj_id in id_list:
             try:
                 doc = BaseDescriptionComponent.get(id=obj_id)
@@ -175,8 +174,9 @@ class DataIndexer:
     def add(self, object_type, merge_objects):
         """Add (merge) documents to the Elasticsearch index for a given object_type.
 
-        Returns a list of indexed ids.
+        Returns a list of successfully indexed ids.
         """
+        
         doc_cls = OBJECT_TYPES.get(object_type)
         indexed_ids = [] # Not sure I actually need to create this list here and return it, since the bulk_action method is returning the list of indexed ids.
 
@@ -191,9 +191,9 @@ class DataIndexer:
         return indexed_ids
     
     def delete(self, delete_ids):
-        """Delete documents from the Elasticsearch index.
+        """Bulk delete documents from Elasticsearch.
         
-        Returns a list of deleted ids.
+        Returns a list of successfully deleted ids.
         """
 
         deleted_ids = [] # Like the add method, not sure this is necessary.
@@ -208,12 +208,12 @@ class DataIndexer:
         return deleted_ids
 
     def deliver_success_notification(self, object_type, indexed_ids, deleted_ids):
-        """Send a message to an SNS topic when processing completes successfully."""
+        """Send a message to an SNS topic when indexing completes successfully."""
         # Not sure what level of data to include as part of success. Include ids for objects?
         pass
 
     def deliver_failure_notification(self, exception):
-        """Send a message to an SNS topic when processing fails."""
+        """Send a message to an SNS topic when indexing fails."""
         # Not sure what level of data to include as part of failure.
         pass
 
