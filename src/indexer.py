@@ -1,7 +1,7 @@
 # New data_index service logic
 # #!/usr/bin/env python3
 
-# TODO: Only use logger instead of print statements?
+# TODO: Only use logger instead of print statements? Generally review and align exception handling across methods.
 
 import json
 import logging
@@ -89,59 +89,125 @@ class DataIndexer:
         )
 
     def run(self, event):
-        """Main method that calls all other methods.
-        
+        """Main method that calls all other methods. Parses SQS messages, 
+        performs indexing actions, and sends notifications.
+
         Args:
             event (dict): SQS event containing messages.
         """
 
         logger.info("Message batch received")
+        grouped_actions = self.parse_batch(event)
+
+        for object_type, actions in grouped_actions.items():
+            try:
+                indexed_ids = []
+                deleted_ids = []
+
+                # Merge/index all objects for this type
+                if actions["merge"]:
+                    indexed_ids = self.add(object_type, actions["merge"])
+
+                # Delete all documents for this type
+                if actions["delete"]:
+                    deleted_ids = self.delete(actions["delete"])
+
+                # Notify success by object_type
+                self.deliver_success_notification(object_type, indexed_ids, deleted_ids) # Do we want success messages by object type, or just one message for the whole batch?
+
+            except Exception as e:
+                self.deliver_failure_notification(e)
+    
+    def parse_batch(self, event):
+        """Parse SQS message data and group objects by type and action."""
+        
+        grouped = {}
         
         for record in event.get("Records", []):
             try:
-                self.process_message(record)
-            except Exception as e:
-                logger.exception("Error processing record")
-                self.deliver_failure_notification(e)
+                body = json.loads(record["body"])
+            except json.JSONDecodeError:
+                raise ValueError("Invalid JSON body")
+            
+            attributes = record.get("messageAttributes", {})
+            requested_action = attributes.get("requested_action", {}).get("stringValue")
 
+            objects = body.get("objects", [])
+            
+            # Get object_type from the object data, since message data can contain multiple object types.
+            for obj in objects:
+                data = obj.get("data")
+                es_id = obj.get("es_id")
+                object_type = data.get("object_type")
+
+                # Group by object type and action
+                grouped.setdefault(object_type, {"merge": [], "delete": []})
+
+                if requested_action == "merge":
+                    grouped[object_type]["merge"].append(obj)
+                elif requested_action == "delete":
+                    grouped[object_type]["delete"].append(es_id) # Delete doesn't need object type, just the ids. Useful for logging?
+
+        return grouped
     
-    def process_message(self, record):
-        """Parse SQS message data.
+    def prepare_updates(self, doc_cls, objects):
+        """Prepares objects to be indexed"""
+        for obj in objects:
+            doc = doc_cls(**obj["data"])
+            try:
+                yield doc.prepare_streaming_dict(obj["es_id"])
+            except Exception as e:
+                raise Exception("Error preparing streaming dict: {}".format(e)) # Use logger?
+
+    def prepare_deletes(self, id_list): # This doesn't delete by object type, it uses the BaseDecriptionComponent class like scorpio. Is that ok?
+        """Prepares objects to be deleted.
         
-        Args:
-            record (dict): A single SQS message record.
+        Ignores documents which cannot be found in the index."""
+        for obj_id in id_list:
+            try:
+                doc = BaseDescriptionComponent.get(id=obj_id)
+                yield doc.prepare_streaming_dict(obj_id, "delete")
+            except NotFoundError:
+                pass
+            except Exception as e:
+                print(e) # TODO: use logger instead of print statements?
+
+    def add(self, object_type, merge_objects):
+        """Add (merge) documents to the Elasticsearch index for a given object_type.
+
+        Returns a list of indexed ids.
         """
+        doc_cls = OBJECT_TYPES.get(object_type)
+        indexed_ids = [] # Not sure I actually need to create this list here and return it, since the bulk_action method is returning the list of indexed ids.
+
         try:
-            body = json.loads(record["body"])
-        except json.JSONDecodeError:
-            body = record["body"]
-
-        attributes = record.get("messageAttributes", {})
-
-        object_type = attributes.get("objectType", {}).get("stringValue")
+            indexed_ids += doc_cls.bulk_action(
+                self.connection,
+                self.prepare_updates(doc_cls, merge_objects)
+            )
+        except Exception as e:
+            raise Exception("Error adding documents: {}".format(e))
         
-        # Was thinking this would call the add or delete functions, but I'm
-        # not actually clear what data I'm able to/need to parse from these messages...
-
-    def add(self, doc_cls, objects):
-        """Bulk index documents into Elasticsearch.
-
-        Args:
-            doc_cls (class): Elasticsearch document class.
-            objects (list): List of objects to be indexed.
+        return indexed_ids
+    
+    def delete(self, delete_ids):
+        """Delete documents from the Elasticsearch index.
+        
+        Returns a list of deleted ids.
         """
-        pass
 
-    def delete(self, doc_cls, objects):
-        """Bulk delete documents from Elasticsearch.
+        deleted_ids = [] # Like the add method, not sure this is necessary.
 
-        Args:
-            doc_cls (class): Elasticsearch document class.
-            objects (list): List of objects to delete.
-        """
-        pass
+        try:
+            deleted_ids += BaseDescriptionComponent.bulk_action(
+                self.connection,
+                self.prepare_deletes(delete_ids))
+        except Exception as e:
+            raise Exception("Error deleting documents: {}".format(e))
+        
+        return deleted_ids
 
-    def deliver_success_notification(self):
+    def deliver_success_notification(self, object_type, indexed_ids, deleted_ids):
         """Send a message to an SNS topic when processing completes successfully."""
         # Not sure what level of data to include as part of success. Include ids for objects?
         pass
@@ -150,7 +216,6 @@ class DataIndexer:
         """Send a message to an SNS topic when processing fails."""
         # Not sure what level of data to include as part of failure.
         pass
-
 
 def lambda_handler(event, context):
     """AWS Lambda entry point that initializes and runs the DataIndexer."""
