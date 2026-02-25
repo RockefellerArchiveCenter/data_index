@@ -1,6 +1,5 @@
-# data index
+# Data Index
 A service to index transformed metadata for Collections, Objects, Agents, and Terms. It is intended to operate as part of a metadata transformation and indexing pipeline.
-
 
 ## Getting Started
 
@@ -11,15 +10,31 @@ git clone https://github.com/RockefellerArchiveCenter/data_index.git
 cd data_index
 ```
 
+## Service Flow
+
+1. Recieves an SQS event message
+2. SQS triggers the Lambda
+3. Iterates over each record in the event
+4. Parses the JSON body and iterates over each object to read data
+5. Groups objects by `object_type` and action (`merge` or `delete`)
+6. Executes bulk ElasticSearch indexing to merge or delete
+7. Publishes results messages to SNS
+
 ## Usage
 
 This repository is intended to be deployed as a Lambda script in AWS infrastructure.
 
 ### Expected Message Format
 
-The script is designed to consume batched messages as an event from an AWS Simple Queue Service (SQS) queue. These messages are expected have the following attributes:
+The script is designed to consume batched messages as an event from an AWS Simple Queue Service (SQS) queue. These messages are expected have:
 
-[fill this in]
+- A JSON string message body containing an `objects` list with the fields: 
+    - `es_id`: Elasticsearch document ID
+    - `data`: Document body to be indexed
+    - `data.object_type`: Supported values: agent, collection, object, term
+- `requested_action` message attribute: The indexing action to perform. Supported values: "merge" (index/update documents) or "delete" (remove documents).
+
+
 
 
 ## License
