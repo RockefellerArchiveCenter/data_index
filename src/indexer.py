@@ -1,19 +1,19 @@
 # New data_index service logic
 # #!/usr/bin/env python3
 
-# TODO: Only use logger instead of print statements? Generally review and align exception handling across methods.
+# TODO: Only use logger instead of print statements? Generally review and
+# align exception handling across methods.
 
 import json
 import logging
 import traceback
-import boto3
-
 from os import getenv
+
+import boto3
 from elasticsearch.exceptions import NotFoundError
 from elasticsearch_dsl import Index, connections
-from rac_es.documents import (
-    Agent, Collection, Object, Term, BaseDescriptionComponent
-)
+from rac_es.documents import (Agent, BaseDescriptionComponent, Collection,
+                              Object, Term)
 
 # Configure Logger
 logger = logging.getLogger()
@@ -28,11 +28,13 @@ OBJECT_TYPES = {
 }
 
 # SSM path for configs
-full_config_path = f"/{getenv('ENV')}/{getenv('APP_CONFIG_PATH')}"  # Is this correct?
+# Is this correct?
+full_config_path = f"/{getenv('ENV')}/{getenv('APP_CONFIG_PATH')}"
+
 
 def get_config(ssm_parameter_path):
     """Fetch config values from AWS Parameter Store by path."""
-    
+
     configuration = {}
     try:
         ssm_client = boto3.client(
@@ -49,25 +51,28 @@ def get_config(ssm_parameter_path):
             section_position = len(param_path_array) - 1
             section_name = param_path_array[section_position]
             configuration[section_name] = param.get('Value')
-        
+
     except BaseException:
         logging.error("Encountered an error loading config from SSM.")
         traceback.print_exc()
     finally:
         return configuration
 
+
 class DataIndexer:
     """Indexes transformed metadata records into Elasticsearch."""
 
     def __init__(self):
         """Initialize connections, configs, and clients"""
-        
+
         config = get_config(full_config_path)
 
         # Elasticsearch connection
-        # Doing my best to convert from Djano settings/configs, but could use a second look
+        # Doing my best to convert from Djano settings/configs, but could use a
+        # second look
         hosts = config["ELASTICSEARCH_HOSTS"]
-        connection_args = {"hosts": hosts, "timeout": 60} # TODO: is this timeout still appropriate?
+        # TODO: is this timeout still appropriate?
+        connection_args = {"hosts": hosts, "timeout": 60}
         if config.get("ELASTICSEARCH_API_KEY"):
             connection_args["api_key"] = config["ELASTICSEARCH_API_KEY"]
         self.connection = connections.create_connection(**connection_args)
@@ -84,7 +89,7 @@ class DataIndexer:
         )
 
     def run(self, event):
-        """Main method that calls all other methods. Parses SQS messages, 
+        """Main method that calls all other methods. Parses SQS messages,
         performs indexing actions, and sends notifications.
         """
 
@@ -105,32 +110,37 @@ class DataIndexer:
                     deleted_ids = self.delete(actions["delete"])
 
                 # Notify success by object_type
-                self.deliver_success_notification(object_type, indexed_ids, deleted_ids) # Do we want success messages by object type, or just one message for the whole batch?
+                # Do we want success messages by object type, or just one
+                # message for the whole batch?
+                self.deliver_success_notification(
+                    object_type, indexed_ids, deleted_ids)
 
             except Exception as e:
                 self.deliver_failure_notification(e)
-    
+
     def parse_batch(self, event):
         """Parse SQS message data and group by object type and action.
-        
-        Supports batches with mixed object types. 
+
+        Supports batches with mixed object types.
         Merge lists contain full object dicts; delete lists contain es_ids.
         """
-        
+
         grouped = {}
-        
+
         for record in event.get("Records", []):
             try:
                 body = json.loads(record["body"])
             except json.JSONDecodeError:
                 raise ValueError("Invalid JSON body")
-            
+
             attributes = record.get("messageAttributes", {})
-            requested_action = attributes.get("requested_action", {}).get("stringValue")
+            requested_action = attributes.get(
+                "requested_action", {}).get("stringValue")
 
             objects = body.get("objects", [])
-            
-            # Get object_type from the object data, since message data can contain multiple object types.
+
+            # Get object_type from the object data, since message data can
+            # contain multiple object types.
             for obj in objects:
                 data = obj.get("data")
                 es_id = obj.get("es_id")
@@ -142,10 +152,12 @@ class DataIndexer:
                 if requested_action == "merge":
                     grouped[object_type]["merge"].append(obj)
                 elif requested_action == "delete":
-                    grouped[object_type]["delete"].append(es_id) # Delete doesn't need object type, just the ids. Useful for logging?
+                    # Delete doesn't need object type, just the ids. Useful for
+                    # logging?
+                    grouped[object_type]["delete"].append(es_id)
 
         return grouped
-    
+
     def prepare_updates(self, doc_cls, objects):
         """Prepare documents for bulk indexing."""
 
@@ -154,11 +166,13 @@ class DataIndexer:
             try:
                 yield doc.prepare_streaming_dict(obj["es_id"])
             except Exception as e:
-                raise Exception("Error preparing streaming dict: {}".format(e)) # Use logger?
+                raise Exception(
+                    # Use logger?
+                    "Error preparing streaming dict: {}".format(e))
 
     def prepare_deletes(self, id_list):
         """Prepare document IDs for bulk deletion via BaseDescriptionComponent.
-        
+
         Ignores documents which cannot be found in the index.
         """
 
@@ -169,16 +183,18 @@ class DataIndexer:
             except NotFoundError:
                 pass
             except Exception as e:
-                print(e) # TODO: use logger instead of print statements?
+                print(e)  # TODO: use logger instead of print statements?
 
     def add(self, object_type, merge_objects):
         """Add (merge) documents to the Elasticsearch index for a given object_type.
 
         Returns a list of successfully indexed ids.
         """
-        
+
         doc_cls = OBJECT_TYPES.get(object_type)
-        indexed_ids = [] # Not sure I actually need to create this list here and return it, since the bulk_action method is returning the list of indexed ids.
+        # Not sure I actually need to create this list here and return it,
+        # since the bulk_action method is returning the list of indexed ids.
+        indexed_ids = []
 
         try:
             indexed_ids += doc_cls.bulk_action(
@@ -187,16 +203,16 @@ class DataIndexer:
             )
         except Exception as e:
             raise Exception("Error adding documents: {}".format(e))
-        
+
         return indexed_ids
-    
+
     def delete(self, delete_ids):
         """Bulk delete documents from Elasticsearch.
-        
+
         Returns a list of successfully deleted ids.
         """
 
-        deleted_ids = [] # Like the add method, not sure this is necessary.
+        deleted_ids = []  # Like the add method, not sure this is necessary.
 
         try:
             deleted_ids += BaseDescriptionComponent.bulk_action(
@@ -204,18 +220,21 @@ class DataIndexer:
                 self.prepare_deletes(delete_ids))
         except Exception as e:
             raise Exception("Error deleting documents: {}".format(e))
-        
+
         return deleted_ids
 
-    def deliver_success_notification(self, object_type, indexed_ids, deleted_ids):
+    def deliver_success_notification(
+            self, object_type, indexed_ids, deleted_ids):
         """Send a message to an SNS topic when indexing completes successfully."""
-        # Not sure what level of data to include as part of success. Include ids for objects?
+        # Not sure what level of data to include as part of success. Include
+        # ids for objects?
         pass
 
     def deliver_failure_notification(self, exception):
         """Send a message to an SNS topic when indexing fails."""
         # Not sure what level of data to include as part of failure.
         pass
+
 
 def lambda_handler(event, context):
     """AWS Lambda entry point that initializes and runs the DataIndexer."""

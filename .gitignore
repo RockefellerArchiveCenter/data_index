@@ -1,3 +1,3 @@
 *.DS_Store
-.archivessnake.yml
-*.pickle
+.coverage
+__pycache__
