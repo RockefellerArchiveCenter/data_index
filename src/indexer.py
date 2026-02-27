@@ -1,8 +1,5 @@
 # #!/usr/bin/env python3
 
-# TODO: Only use logger instead of print statements? Generally review and
-# align exception handling across methods.
-
 import json
 import logging
 import traceback
@@ -27,7 +24,6 @@ OBJECT_TYPES = {
 }
 
 # SSM path for configs
-# Is this correct?
 SERVICE_NAME = 'data_index'
 FULL_CONFIG_PATH = f"/{getenv('ENV')}/{getenv('APP_CONFIG_PATH')}"
 
@@ -188,7 +184,7 @@ class DataIndexer:
             except NotFoundError:
                 pass
             except Exception as e:
-                print(e)  # TODO: use logger instead of print statements?
+                print(e)
 
     def add(self, object_type, index_objects):
         """Add documents to the Elasticsearch index for a given object_type.
