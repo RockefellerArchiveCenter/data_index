@@ -107,15 +107,17 @@ class DataIndexer:
                     result = self.add(object_type, [obj])
                     indexed_ids += result
                 except Exception as e:
-                    self.deliver_failure_notification(obj["data"], self.config, object_type, e)
-                    
+                    self.deliver_failure_notification(
+                        obj["data"], object_type, e)
+
             # Delete documents individually by type to send failure per object
             for obj_id in actions["delete"]:
                 try:
                     result = self.delete([obj_id])
                     deleted_ids += result
                 except Exception as e:
-                    self.deliver_failure_notification(obj["data"], self.config, object_type, e)
+                    self.deliver_failure_notification(
+                        obj["data"], object_type, e)
 
             # Notify success grouped by object_type
             self.deliver_success_notification(
@@ -140,13 +142,15 @@ class DataIndexer:
             requested_action = attributes.get(
                 "requested_action", {}).get("stringValue")
 
-            objects = body.get("objects", []) # data_transform is not sending "objects" right now, though?
+            # data_transform is not sending "objects" right now, though?
+            objects = body.get("objects", [])
 
             # Get object_type from the object data, since message data can
             # contain multiple object types.
             for obj in objects:
                 data = obj.get("data")
-                es_id = obj.get("es_id") # Assuming es_id is in the message data
+                # Assuming es_id is in the message data
+                es_id = obj.get("es_id")
                 object_type = data.get("object_type")
 
                 # Group by object type and action
@@ -226,18 +230,53 @@ class DataIndexer:
 
     def deliver_success_notification(
             self, object_type, indexed_ids, deleted_ids):
-        """Send a message to an SNS topic when indexing completes successfully for a batch."""
-        # Not sure what level of data to include as part of success. Include
-        # ids for objects?
-        pass
+        """Send a message to an SNS topic when indexing completes successfully for a batch.
+        Includes a count of indexed and deleted documents, and groups messages by object type.
+        """
 
-    def deliver_failure_notification(self, data, config, object_type, exception):
-        """Send message to an SNS topic when indexing fails for an object."""
-        
-        client = boto3.client('sns', region_name=getenv('AWS_DEFAULT_REGION', 'us-east-1'))
+        client = boto3.client(
+            'sns', region_name=getenv(
+                'AWS_DEFAULT_REGION', 'us-east-1'))
+        client.publish(
+            TopicArn=self.sns_topic,
+            MessageGroupId=f'{SERVICE_NAME}-{object_type}',
+            MessageDeduplicationId=f'{SERVICE_NAME}-{object_type}-success',
+            Message=f"Successfully indexed {
+                len(indexed_ids)} documents and deleted {
+                len(deleted_ids)} documents for object type {object_type}",
+            MessageAttributes={
+                'service': {
+                    'DataType': 'String',
+                    'StringValue': SERVICE_NAME,
+                },
+                'object_type': {
+                    'DataType': 'String',
+                    'StringValue': object_type,
+                },
+                'outcome': {
+                    'DataType': 'String',
+                    'StringValue': 'SUCCESS',
+                },
+                'indexed_count': {
+                    'DataType': 'Number',
+                    'StringValue': str(len(indexed_ids)),
+                },
+                'deleted_count': {
+                    'DataType': 'Number',
+                    'StringValue': str(len(deleted_ids)),
+                }
+            })
+
+    def deliver_failure_notification(self, data, object_type, exception):
+        """Send message to an SNS topic when indexing fails for an object.
+        """
+
+        client = boto3.client(
+            'sns', region_name=getenv(
+                'AWS_DEFAULT_REGION', 'us-east-1'))
         tb = ''.join(traceback.format_exception(exception)[:-1])
         client.publish(
-            TopicArn=config['SNS_TOPIC'],
+            TopicArn=self.sns_topic,
             MessageGroupId=f'{SERVICE_NAME}-{data["uri"]}',
             MessageDeduplicationId=f'{SERVICE_NAME}-{data["uri"]}-failure',
             Message=tb,
