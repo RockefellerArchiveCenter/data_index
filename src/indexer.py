@@ -230,16 +230,12 @@ class DataIndexer:
         Includes a count of indexed and deleted documents, and groups messages by object type.
         """
 
-        client = boto3.client(
-            'sns', region_name=getenv(
-                'AWS_DEFAULT_REGION', 'us-east-1'))
+        client = boto3.client('sns', region_name=getenv('AWS_DEFAULT_REGION', 'us-east-1'))
         client.publish(
             TopicArn=self.sns_topic,
             MessageGroupId=f'{SERVICE_NAME}-{object_type}',
             MessageDeduplicationId=f'{SERVICE_NAME}-{object_type}-success',
-            Message=f"Successfully indexed {
-                len(indexed_ids)} documents and deleted {
-                len(deleted_ids)} documents for object type {object_type}",
+            Message=f"Successfully indexed {len(indexed_ids)} documents and deleted {len(deleted_ids)} documents for object type {object_type}",
             MessageAttributes={
                 'service': {
                     'DataType': 'String',
@@ -267,9 +263,7 @@ class DataIndexer:
         """Send message to an SNS topic when indexing fails for an object.
         """
 
-        client = boto3.client(
-            'sns', region_name=getenv(
-                'AWS_DEFAULT_REGION', 'us-east-1'))
+        client = boto3.client('sns', region_name=getenv('AWS_DEFAULT_REGION', 'us-east-1'))
         tb = ''.join(traceback.format_exception(exception)[:-1])
         client.publish(
             TopicArn=self.sns_topic,
