@@ -33,9 +33,7 @@ def get_config(ssm_parameter_path):
 
     configuration = {}
     try:
-        ssm_client = boto3.client(
-            'ssm',
-            region_name=getenv('AWS_DEFAULT_REGION', 'us-east-1'))
+        ssm_client = boto3.client('ssm', region_name=getenv('AWS_DEFAULT_REGION', 'us-east-1'))
 
         param_details = ssm_client.get_parameters_by_path(
             Path=ssm_parameter_path,
@@ -51,8 +49,7 @@ def get_config(ssm_parameter_path):
     except BaseException:
         logging.error("Encountered an error loading config from SSM.")
         traceback.print_exc()
-    # Won't "finally" execute whether or not there is an exception? Do we want that?
-    finally:
+    finally:  # Won't "finally" execute whether or not there is an exception? Do we want that?
         return configuration
 
 
@@ -68,8 +65,7 @@ class DataIndexer:
         # Doing my best to convert from Djano settings/configs, but could use a
         # second look
         hosts = self.config["ELASTICSEARCH_HOSTS"]
-        # TODO: is this timeout still appropriate?
-        connection_args = {"hosts": hosts, "timeout": 60}
+        connection_args = {"hosts": hosts, "timeout": 60}  # TODO: is this timeout still appropriate?
         if self.config.get("ELASTICSEARCH_API_KEY"):
             connection_args["api_key"] = self.config["ELASTICSEARCH_API_KEY"]
         self.connection = connections.create_connection(**connection_args)
@@ -80,10 +76,7 @@ class DataIndexer:
 
         # SNS Setup
         self.sns_topic = self.config.get("AWS_SNS_TOPIC")
-        self.sns_client = boto3.client(
-            "sns",
-            region_name=getenv("AWS_DEFAULT_REGION", "us-east-1")
-        )
+        self.sns_client = boto3.client("sns", region_name=getenv("AWS_DEFAULT_REGION", "us-east-1"))
 
     def run(self, event):
         """Main method that calls all other methods. Parses SQS messages,
@@ -115,8 +108,7 @@ class DataIndexer:
                     self.deliver_failure_notification(obj["uri"], object_type, e)
 
             # Notify success grouped by object_type
-            self.deliver_success_notification(
-                object_type, indexed_ids, deleted_ids)
+            self.deliver_success_notification(object_type, indexed_ids, deleted_ids)
 
     def parse_batch(self, event):
         """Parse SQS message data and group by object type and action.
