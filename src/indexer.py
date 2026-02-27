@@ -104,17 +104,15 @@ class DataIndexer:
                     result = self.add(object_type, [obj])
                     indexed_ids += result
                 except Exception as e:
-                    self.deliver_failure_notification(
-                        obj["data"], object_type, e)
+                    self.deliver_failure_notification(obj["uri"], object_type, e)
 
             # Delete documents individually by type to send failure per object
-            for obj_id in actions["delete"]:
+            for obj in actions["delete"]:
                 try:
-                    result = self.delete([obj_id])
+                    result = self.delete([obj["es_id"]])
                     deleted_ids += result
                 except Exception as e:
-                    self.deliver_failure_notification(
-                        obj["data"], object_type, e)
+                    self.deliver_failure_notification(obj["uri"], object_type, e)
 
             # Notify success grouped by object_type
             self.deliver_success_notification(
@@ -149,14 +147,22 @@ class DataIndexer:
                 # Assuming es_id is in the message data
                 es_id = obj.get("es_id")
                 object_type = data.get("object_type")
+                uri = data.get("uri")
 
                 # Group by object type and action
                 grouped.setdefault(object_type, {"merge": [], "delete": []})
 
                 if requested_action == "merge":
-                    grouped[object_type]["merge"].append(obj)
+                    grouped[object_type]["merge"].append({
+                        "es_id": es_id,
+                        "uri": uri,
+                        "data": data
+                    })
                 elif requested_action == "delete":
-                    grouped[object_type]["delete"].append(es_id)
+                    grouped[object_type]["delete"].append({
+                        "es_id": es_id,
+                        "uri": uri
+                    })
 
         return grouped
 
@@ -259,15 +265,15 @@ class DataIndexer:
                 }
             })
 
-    def deliver_failure_notification(self, data, object_type, exception):
+    def deliver_failure_notification(self, uri, object_type, exception):
         """Send message to an SNS topic when indexing fails for an object.
         """
 
         tb = ''.join(traceback.format_exception(exception)[:-1])
         self.sns_client.publish(
             TopicArn=self.sns_topic,
-            MessageGroupId=f'{SERVICE_NAME}-{data["uri"]}',
-            MessageDeduplicationId=f'{SERVICE_NAME}-{data["uri"]}-failure',
+            MessageGroupId=f'{SERVICE_NAME}-{uri}',
+            MessageDeduplicationId=f'{SERVICE_NAME}-{uri}-failure',
             Message=tb,
             MessageAttributes={
                 'service': {
