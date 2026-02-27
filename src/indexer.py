@@ -51,6 +51,7 @@ def get_config(ssm_parameter_path):
     except BaseException:
         logging.error("Encountered an error loading config from SSM.")
         traceback.print_exc()
+    # Won't "finally" execute whether or not there is an exception? Do we want that?
     finally:
         return configuration
 
@@ -168,7 +169,7 @@ class DataIndexer:
                 yield doc.prepare_streaming_dict(obj["es_id"])
             except Exception as e:
                 raise Exception(
-                    # Use logger?
+                    # TODO: Use logger instead?
                     "Error preparing streaming dict: {}".format(e))
 
     def prepare_deletes(self, id_list):
@@ -184,6 +185,7 @@ class DataIndexer:
             except NotFoundError:
                 pass
             except Exception as e:
+                # TODO: Use logger instead?
                 print(e)
 
     def add(self, object_type, index_objects):
@@ -224,14 +226,12 @@ class DataIndexer:
 
         return deleted_ids
 
-    def deliver_success_notification(
-            self, object_type, indexed_ids, deleted_ids):
+    def deliver_success_notification(self, object_type, indexed_ids, deleted_ids):
         """Send a message to an SNS topic when indexing completes successfully for a batch.
         Includes a count of indexed and deleted documents, and groups messages by object type.
         """
 
-        client = boto3.client('sns', region_name=getenv('AWS_DEFAULT_REGION', 'us-east-1'))
-        client.publish(
+        self.sns_client.publish(
             TopicArn=self.sns_topic,
             MessageGroupId=f'{SERVICE_NAME}-{object_type}',
             MessageDeduplicationId=f'{SERVICE_NAME}-{object_type}-success',
@@ -263,9 +263,8 @@ class DataIndexer:
         """Send message to an SNS topic when indexing fails for an object.
         """
 
-        client = boto3.client('sns', region_name=getenv('AWS_DEFAULT_REGION', 'us-east-1'))
         tb = ''.join(traceback.format_exception(exception)[:-1])
-        client.publish(
+        self.sns_client.publish(
             TopicArn=self.sns_topic,
             MessageGroupId=f'{SERVICE_NAME}-{data["uri"]}',
             MessageDeduplicationId=f'{SERVICE_NAME}-{data["uri"]}-failure',
