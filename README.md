@@ -32,6 +32,7 @@ The script is designed to consume batched messages as an event from an AWS Simpl
     - `es_id`: Elasticsearch document ID
     - `data`: Document body to be indexed
     - `data.object_type`: Supported values: agent, collection, object, term
+    - `data.uri`: unique object identifier
 - `requested_action` message attribute: The indexing action to perform. Supported values: "merge" (index/update documents) or "delete" (remove documents).
 
 
