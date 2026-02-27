@@ -1,4 +1,3 @@
-# New data_index service logic
 # #!/usr/bin/env python3
 
 # TODO: Only use logger instead of print statements? Generally review and
@@ -29,7 +28,8 @@ OBJECT_TYPES = {
 
 # SSM path for configs
 # Is this correct?
-full_config_path = f"/{getenv('ENV')}/{getenv('APP_CONFIG_PATH')}"
+SERVICE_NAME = 'data_index'
+FULL_CONFIG_PATH = f"/{getenv('ENV')}/{getenv('APP_CONFIG_PATH')}"
 
 
 def get_config(ssm_parameter_path):
@@ -65,24 +65,24 @@ class DataIndexer:
     def __init__(self):
         """Initialize connections, configs, and clients"""
 
-        config = get_config(full_config_path)
+        self.config = get_config(FULL_CONFIG_PATH)
 
         # Elasticsearch connection
         # Doing my best to convert from Djano settings/configs, but could use a
         # second look
-        hosts = config["ELASTICSEARCH_HOSTS"]
+        hosts = self.config["ELASTICSEARCH_HOSTS"]
         # TODO: is this timeout still appropriate?
         connection_args = {"hosts": hosts, "timeout": 60}
-        if config.get("ELASTICSEARCH_API_KEY"):
-            connection_args["api_key"] = config["ELASTICSEARCH_API_KEY"]
+        if self.config.get("ELASTICSEARCH_API_KEY"):
+            connection_args["api_key"] = self.config["ELASTICSEARCH_API_KEY"]
         self.connection = connections.create_connection(**connection_args)
 
         # Ensure the index exists
-        if not Index(config.get("ELASTICSEARCH_INDEX")).exists():
+        if not Index(self.config.get("ELASTICSEARCH_INDEX")).exists():
             BaseDescriptionComponent.init()
 
         # SNS Setup
-        self.sns_topic = config.get("AWS_SNS_TOPIC")
+        self.sns_topic = self.config.get("AWS_SNS_TOPIC")
         self.sns_client = boto3.client(
             "sns",
             region_name=getenv("AWS_DEFAULT_REGION", "us-east-1")
@@ -97,26 +97,29 @@ class DataIndexer:
         grouped_actions = self.parse_batch(event)
 
         for object_type, actions in grouped_actions.items():
-            try:
-                indexed_ids = []
-                deleted_ids = []
 
-                # Merge/index all objects for this type
-                if actions["merge"]:
-                    indexed_ids = self.add(object_type, actions["merge"])
+            indexed_ids = []
+            deleted_ids = []
 
-                # Delete all documents for this type
-                if actions["delete"]:
-                    deleted_ids = self.delete(actions["delete"])
+            # Index each object individually by type to send failure per object
+            for obj in actions["merge"]:
+                try:
+                    result = self.add(object_type, [obj])
+                    indexed_ids += result
+                except Exception as e:
+                    self.deliver_failure_notification(obj["data"], self.config, object_type, e)
+                    
+            # Delete documents individually by type to send failure per object
+            for obj_id in actions["delete"]:
+                try:
+                    result = self.delete([obj_id])
+                    deleted_ids += result
+                except Exception as e:
+                    self.deliver_failure_notification(obj["data"], self.config, object_type, e)
 
-                # Notify success by object_type
-                # Do we want success messages by object type, or just one
-                # message for the whole batch?
-                self.deliver_success_notification(
-                    object_type, indexed_ids, deleted_ids)
-
-            except Exception as e:
-                self.deliver_failure_notification(e)
+            # Notify success grouped by object_type
+            self.deliver_success_notification(
+                object_type, indexed_ids, deleted_ids)
 
     def parse_batch(self, event):
         """Parse SQS message data and group by object type and action.
@@ -137,13 +140,13 @@ class DataIndexer:
             requested_action = attributes.get(
                 "requested_action", {}).get("stringValue")
 
-            objects = body.get("objects", [])
+            objects = body.get("objects", []) # data_transform is not sending "objects" right now, though?
 
             # Get object_type from the object data, since message data can
             # contain multiple object types.
             for obj in objects:
                 data = obj.get("data")
-                es_id = obj.get("es_id")
+                es_id = obj.get("es_id") # Assuming es_id is in the message data
                 object_type = data.get("object_type")
 
                 # Group by object type and action
@@ -152,8 +155,6 @@ class DataIndexer:
                 if requested_action == "merge":
                     grouped[object_type]["merge"].append(obj)
                 elif requested_action == "delete":
-                    # Delete doesn't need object type, just the ids. Useful for
-                    # logging?
                     grouped[object_type]["delete"].append(es_id)
 
         return grouped
@@ -185,8 +186,8 @@ class DataIndexer:
             except Exception as e:
                 print(e)  # TODO: use logger instead of print statements?
 
-    def add(self, object_type, merge_objects):
-        """Add (merge) documents to the Elasticsearch index for a given object_type.
+    def add(self, object_type, index_objects):
+        """Add documents to the Elasticsearch index for a given object_type.
 
         Returns a list of successfully indexed ids.
         """
@@ -199,7 +200,7 @@ class DataIndexer:
         try:
             indexed_ids += doc_cls.bulk_action(
                 self.connection,
-                self.prepare_updates(doc_cls, merge_objects)
+                self.prepare_updates(doc_cls, index_objects)
             )
         except Exception as e:
             raise Exception("Error adding documents: {}".format(e))
@@ -225,15 +226,39 @@ class DataIndexer:
 
     def deliver_success_notification(
             self, object_type, indexed_ids, deleted_ids):
-        """Send a message to an SNS topic when indexing completes successfully."""
+        """Send a message to an SNS topic when indexing completes successfully for a batch."""
         # Not sure what level of data to include as part of success. Include
         # ids for objects?
         pass
 
-    def deliver_failure_notification(self, exception):
-        """Send a message to an SNS topic when indexing fails."""
-        # Not sure what level of data to include as part of failure.
-        pass
+    def deliver_failure_notification(self, data, config, object_type, exception):
+        """Send message to an SNS topic when indexing fails for an object."""
+        
+        client = boto3.client('sns', region_name=getenv('AWS_DEFAULT_REGION', 'us-east-1'))
+        tb = ''.join(traceback.format_exception(exception)[:-1])
+        client.publish(
+            TopicArn=config['SNS_TOPIC'],
+            MessageGroupId=f'{SERVICE_NAME}-{data["uri"]}',
+            MessageDeduplicationId=f'{SERVICE_NAME}-{data["uri"]}-failure',
+            Message=tb,
+            MessageAttributes={
+                'service': {
+                    'DataType': 'String',
+                    'StringValue': SERVICE_NAME,
+                },
+                'object_type': {
+                    'DataType': 'String',
+                    'StringValue': object_type,
+                },
+                'outcome': {
+                    'DataType': 'String',
+                    'StringValue': 'FAILURE',
+                },
+                'message': {
+                    'DataType': 'String',
+                    'StringValue': str(exception),
+                }
+            })
 
 
 def lambda_handler(event, context):
