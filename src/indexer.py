@@ -114,7 +114,7 @@ class DataIndexer:
 
         Batches contain multiple SQS records, each containing a single object.
         Records can contain different object types and actions. Delete actions come from
-        data_fetch messages, while merge actions come from data_transform messages.
+        data_fetch messages, while index actions come from data_transform messages.
         """
 
         grouped = {}
@@ -130,7 +130,7 @@ class DataIndexer:
 
             grouped.setdefault(object_type, {"add": [], "delete": []})
 
-            if requested_action == "merge":
+            if requested_action == "index":
                 obj = body["objects"][0]
                 data = obj["data"]
                 es_id = obj["es_id"]
