@@ -91,7 +91,7 @@ class DataIndexer:
             deleted_ids = []
 
             # Index each object individually by type to send failure per object
-            for obj in actions["merge"]:
+            for obj in actions["add"]:
                 try:
                     result = self.add(object_type, [obj])
                     indexed_ids += result
@@ -113,7 +113,7 @@ class DataIndexer:
         """Parse SQS message data and group by object type and action.
 
         Supports batches with mixed object types.
-        Merge lists contain full object dicts; delete lists contain es_ids.
+        Add lists contain full object dicts; delete lists contain es_ids.
         """
 
         grouped = {}
@@ -141,10 +141,10 @@ class DataIndexer:
                 uri = data.get("uri")
 
                 # Group by object type and action
-                grouped.setdefault(object_type, {"merge": [], "delete": []})
+                grouped.setdefault(object_type, {"add": [], "delete": []})
 
                 if requested_action == "merge":
-                    grouped[object_type]["merge"].append({
+                    grouped[object_type]["add"].append({
                         "es_id": es_id,
                         "uri": uri,
                         "data": data
