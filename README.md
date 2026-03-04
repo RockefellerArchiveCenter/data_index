@@ -12,12 +12,12 @@ cd data_index
 
 ## Service Flow
 
-1. Recieves an SQS event message
+1. Recieves an SQS event message with a single object (record)
 2. SQS triggers the Lambda
 3. Iterates over each record in the event
 4. Parses the JSON body and iterates over each object to read data
-5. Groups objects by `object_type` and action (`merge` or `delete`)
-6. Executes bulk ElasticSearch indexing to merge or delete
+5. Groups objects by `object_type` and action (`add` or `delete`)
+6. Executes bulk ElasticSearch indexing to index or delete
 7. Publishes results messages to SNS
 
 ## Usage
@@ -26,16 +26,23 @@ This repository is intended to be deployed as a Lambda script in AWS infrastruct
 
 ### Expected Message Format
 
-The script is designed to consume batched messages as an event from an AWS Simple Queue Service (SQS) queue. These messages are expected have:
+The script is designed to consume batched messages as an event from an AWS Simple Queue Service (SQS) queue. Each SQS record contains a single object with the following structure:
 
-- A JSON string message body containing an `objects` list with the fields: 
+### For index actions (`requested_action: "index"`):
+- A JSON string message body containing an `objects` array (single element) with:
     - `es_id`: Elasticsearch document ID
-    - `data`: Document body to be indexed
-    - `data.object_type`: Supported values: agent, collection, object, term
-    - `data.uri`: unique object identifier
-- `requested_action` message attribute: The indexing action to perform. Supported values: "merge" (index/update documents) or "delete" (remove documents).
+    - `data`: Document body to be indexed, including:
+        - `data.object_type`: Supported values: agent, collection, object, term
+        - `data.uri`: unique object identifier
+- `requested_action` message attribute: `"index"`
 
-
+### For delete actions (`requested_action: "delete"`):
+- A JSON string message body with:
+    - `es_id`: Elasticsearch document ID to delete
+    - `uri`: unique object identifier
+- Message attributes:
+    - `requested_action`: `"delete"`
+    - `object_type`: Document type (agent, collection, object, or term)
 
 
 ## License
