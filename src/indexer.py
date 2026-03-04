@@ -112,8 +112,9 @@ class DataIndexer:
     def parse_batch(self, event):
         """Parse SQS message data and group by object type and action.
 
-        Supports batches with mixed object types.
-        Add lists contain full object dicts; delete lists contain es_ids.
+        Batches contain multiple SQS records, each containing a single object.
+        Records can contain different object types and actions. Delete actions come from
+        data_fetch messages, while merge actions come from data_transform messages.
         """
 
         grouped = {}
@@ -125,35 +126,23 @@ class DataIndexer:
                 raise ValueError("Invalid JSON body")
 
             attributes = record.get("messageAttributes", {})
-            requested_action = attributes.get(
-                "requested_action", {}).get("stringValue")
+            requested_action = attributes.get("requested_action", {}).get("stringValue")
 
-            # data_transform is not sending "objects" right now, though?
-            objects = body.get("objects", [])
+            grouped.setdefault(object_type, {"add": [], "delete": []})
 
-            # Get object_type from the object data, since message data can
-            # contain multiple object types.
-            for obj in objects:
-                data = obj.get("data")
-                # Assuming es_id is in the message data
-                es_id = obj.get("es_id")
-                object_type = data.get("object_type")
-                uri = data.get("uri")
+            if requested_action == "merge":
+                obj = body["objects"][0]
+                data = obj["data"]
+                es_id = obj["es_id"]
+                uri = data["uri"]
+                object_type = data["object_type"]
+                grouped[object_type]["add"].append({"es_id": es_id, "uri": uri, "data": data})
 
-                # Group by object type and action
-                grouped.setdefault(object_type, {"add": [], "delete": []})
-
-                if requested_action == "merge":
-                    grouped[object_type]["add"].append({
-                        "es_id": es_id,
-                        "uri": uri,
-                        "data": data
-                    })
-                elif requested_action == "delete":
-                    grouped[object_type]["delete"].append({
-                        "es_id": es_id,
-                        "uri": uri
-                    })
+            elif requested_action == "delete":
+                es_id = body["es_id"]
+                uri = body["uri"]
+                object_type = attributes.get("object_type", {}).get("stringValue")
+                grouped[object_type]["delete"].append({"es_id": es_id, "uri": uri})
 
         return grouped
 
