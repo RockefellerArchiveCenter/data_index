@@ -1,5 +1,3 @@
-# #!/usr/bin/env python3
-
 import json
 import logging
 import traceback
@@ -49,7 +47,7 @@ def get_config(ssm_parameter_path):
     except BaseException:
         logging.error("Encountered an error loading config from SSM.")
         traceback.print_exc()
-    finally:  # Won't "finally" execute whether or not there is an exception? Do we want that?
+    finally:
         return configuration
 
 
@@ -62,8 +60,6 @@ class DataIndexer:
         self.config = get_config(FULL_CONFIG_PATH)
 
         # Elasticsearch connection
-        # Doing my best to convert from Djano settings/configs, but could use a
-        # second look
         hosts = self.config["ELASTICSEARCH_HOSTS"]
         connection_args = {"hosts": hosts, "timeout": 60}  # TODO: is this timeout still appropriate?
         if self.config.get("ELASTICSEARCH_API_KEY"):
@@ -71,8 +67,11 @@ class DataIndexer:
         self.connection = connections.create_connection(**connection_args)
 
         # Ensure the index exists
-        if not Index(self.config.get("ELASTICSEARCH_INDEX")).exists():
-            BaseDescriptionComponent.init()
+        index_name = self.config.get("ELASTICSEARCH_INDEX")
+        if not Index(index_name).exists():
+            raise RuntimeError(
+                f"Elasticsearch index '{index_name}' does not exist. "
+            )
 
         # SNS Setup
         self.sns_topic = self.config.get("AWS_SNS_TOPIC")
@@ -163,12 +162,7 @@ class DataIndexer:
 
         for obj in objects:
             doc = doc_cls(**obj["data"])
-            try:
-                yield doc.prepare_streaming_dict(obj["es_id"])
-            except Exception as e:
-                raise Exception(
-                    # TODO: Use logger instead?
-                    "Error preparing streaming dict: {}".format(e))
+            yield doc.prepare_streaming_dict(obj["es_id"])
 
     def prepare_deletes(self, id_list):
         """Prepare document IDs for bulk deletion via BaseDescriptionComponent.
@@ -182,9 +176,6 @@ class DataIndexer:
                 yield doc.prepare_streaming_dict(obj_id, "delete")
             except NotFoundError:
                 pass
-            except Exception as e:
-                # TODO: Use logger instead?
-                print(e)
 
     def add(self, object_type, index_objects):
         """Add documents to the Elasticsearch index for a given object_type.
@@ -193,19 +184,10 @@ class DataIndexer:
         """
 
         doc_cls = OBJECT_TYPES.get(object_type)
-        # Not sure I actually need to create this list here and return it,
-        # since the bulk_action method is returning the list of indexed ids.
-        indexed_ids = []
-
-        try:
-            indexed_ids += doc_cls.bulk_action(
-                self.connection,
-                self.prepare_updates(doc_cls, index_objects)
-            )
-        except Exception as e:
-            raise Exception("Error adding documents: {}".format(e))
-
-        return indexed_ids
+        return doc_cls.bulk_action(
+            self.connection,
+            self.prepare_updates(doc_cls, index_objects)
+        )
 
     def delete(self, delete_ids):
         """Bulk delete documents from Elasticsearch.
@@ -213,16 +195,10 @@ class DataIndexer:
         Returns a list of successfully deleted ids.
         """
 
-        deleted_ids = []  # Like the add method, not sure this is necessary.
-
-        try:
-            deleted_ids += BaseDescriptionComponent.bulk_action(
-                self.connection,
-                self.prepare_deletes(delete_ids))
-        except Exception as e:
-            raise Exception("Error deleting documents: {}".format(e))
-
-        return deleted_ids
+        return BaseDescriptionComponent.bulk_action(
+            self.connection,
+            self.prepare_deletes(delete_ids)
+        )
 
     def deliver_success_notification(self, object_type, indexed_ids, deleted_ids):
         """Send a message to an SNS topic when indexing completes successfully for a batch.
