@@ -127,22 +127,16 @@ class DataIndexer:
 
             attributes = record.get("messageAttributes", {})
             requested_action = attributes.get("requested_action", {}).get("stringValue")
+            es_id = attributes.get("es_id", {}).get("stringValue")
+            object_type = attributes.get("object_type", {}).get("stringValue")
 
             grouped.setdefault(object_type, {"add": [], "delete": []})
 
             if requested_action == "index":
-                obj = body["objects"][0]
-                data = obj["data"]
-                es_id = obj["es_id"]
-                uri = data["uri"]
-                object_type = data["object_type"]
-                grouped[object_type]["add"].append({"es_id": es_id, "uri": uri, "data": data})
+                grouped[object_type]["add"].append({"es_id": es_id, "data": data})
 
             elif requested_action == "delete":
-                es_id = body["es_id"]
-                uri = body["uri"]
-                object_type = attributes.get("object_type", {}).get("stringValue")
-                grouped[object_type]["delete"].append({"es_id": es_id, "uri": uri})
+                grouped[object_type]["delete"].append({"es_id": es_id})
 
         return grouped
 
