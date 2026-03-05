@@ -96,7 +96,7 @@ class DataIndexer:
                     result = self.add(object_type, [obj])
                     indexed_ids += result
                 except Exception as e:
-                    self.deliver_failure_notification(obj["uri"], object_type, e)
+                    self.deliver_failure_notification(obj["es_id"], object_type, obj["object_status"], e)
 
             # Delete documents individually by type to send failure per object
             for obj in actions["delete"]:
@@ -104,7 +104,7 @@ class DataIndexer:
                     result = self.delete([obj["es_id"]])
                     deleted_ids += result
                 except Exception as e:
-                    self.deliver_failure_notification(obj["uri"], object_type, e)
+                    self.deliver_failure_notification(obj["es_id"], object_type, obj["object_status"], e)
 
             # Notify success grouped by object_type
             self.deliver_success_notification(object_type, indexed_ids, deleted_ids)
@@ -133,10 +133,10 @@ class DataIndexer:
             grouped.setdefault(object_type, {"add": [], "delete": []})
 
             if requested_action == "index":
-                grouped[object_type]["add"].append({"es_id": es_id, "data": data})
+                grouped[object_type]["add"].append({"es_id": es_id, "data": body, "object_status": "updated"})
 
             elif requested_action == "delete":
-                grouped[object_type]["delete"].append({"es_id": es_id})
+                grouped[object_type]["delete"].append({"es_id": es_id, "object_status": "deleted"})
 
         return grouped
 
@@ -216,28 +216,36 @@ class DataIndexer:
                 }
             })
 
-    def deliver_failure_notification(self, uri, object_type, exception):
+    def deliver_failure_notification(self, es_id, object_type, object_status, exception):
         """Send message to an SNS topic when indexing fails for an object.
         """
 
         tb = ''.join(traceback.format_exception(exception)[:-1])
         self.sns_client.publish(
             TopicArn=self.sns_topic,
-            MessageGroupId=f'{SERVICE_NAME}-{uri}',
-            MessageDeduplicationId=f'{SERVICE_NAME}-{uri}-failure',
+            MessageGroupId=f'{SERVICE_NAME}-{es_id}',
+            MessageDeduplicationId=f'{SERVICE_NAME}-{es_id}-failure',
             Message=tb,
             MessageAttributes={
                 'service': {
                     'DataType': 'String',
                     'StringValue': SERVICE_NAME,
                 },
+                'outcome': {
+                    'DataType': 'String',
+                    'StringValue': 'FAILURE',
+                },
                 'object_type': {
                     'DataType': 'String',
                     'StringValue': object_type,
                 },
-                'outcome': {
+                'object_status': {
                     'DataType': 'String',
-                    'StringValue': 'FAILURE',
+                    'StringValue': object_status,
+                },
+                'object_id': {
+                    'DataType': 'String',
+                    'StringValue': es_id,
                 },
                 'message': {
                     'DataType': 'String',
