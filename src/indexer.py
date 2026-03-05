@@ -77,38 +77,6 @@ class DataIndexer:
         self.sns_topic = self.config.get("AWS_SNS_TOPIC")
         self.sns_client = boto3.client("sns", region_name=getenv("AWS_DEFAULT_REGION", "us-east-1"))
 
-    def run(self, event):
-        """Main method that calls all other methods. Parses SQS messages,
-        performs indexing actions, and sends notifications.
-        """
-
-        logger.info("Message batch received")
-        grouped_actions = self.parse_batch(event)
-
-        for object_type, actions in grouped_actions.items():
-
-            indexed_ids = []
-            deleted_ids = []
-
-            # Index each object individually by type to send failure per object
-            for obj in actions["add"]:
-                try:
-                    result = self.add(object_type, [obj])
-                    indexed_ids += result
-                except Exception as e:
-                    self.deliver_failure_notification(obj["es_id"], object_type, obj["object_status"], e)
-
-            # Delete documents individually by type to send failure per object
-            for obj in actions["delete"]:
-                try:
-                    result = self.delete([obj["es_id"]])
-                    deleted_ids += result
-                except Exception as e:
-                    self.deliver_failure_notification(obj["es_id"], object_type, obj["object_status"], e)
-
-            # Notify success grouped by object_type
-            self.deliver_success_notification(object_type, indexed_ids, deleted_ids)
-
     def parse_batch(self, event):
         """Parse SQS message data and group by object type and action.
 
@@ -255,5 +223,35 @@ class DataIndexer:
 
 
 def lambda_handler(event, context):
-    """AWS Lambda entry point that initializes and runs the DataIndexer."""
-    DataIndexer().run(event)
+    """AWS Lambda entry point. Parses SQS messages, groups records by
+    object type and action, performs Elasticsearch indexing or deletion, and
+    publishes success and failure notifications to SNS.
+    """
+    
+    logger.info("Message batch received")
+    indexer = DataIndexer()
+    grouped_actions = indexer.parse_batch(event)
+
+    for object_type, actions in grouped_actions.items():
+
+        indexed_ids = []
+        deleted_ids = []
+
+        # Index each object individually by type to send failure per object
+        for obj in actions["add"]:
+            try:
+                result = indexer.add(object_type, [obj])
+                indexed_ids += result
+            except Exception as e:
+                indexer.deliver_failure_notification(obj["es_id"], object_type, obj["object_status"], e)
+
+        # Delete documents individually by type to send failure per object
+        for obj in actions["delete"]:
+            try:
+                result = indexer.delete([obj["es_id"]])
+                deleted_ids += result
+            except Exception as e:
+                indexer.deliver_failure_notification(obj["es_id"], object_type, obj["object_status"], e)
+
+        # Notify success grouped by object_type
+        indexer.deliver_success_notification(object_type, indexed_ids, deleted_ids)
