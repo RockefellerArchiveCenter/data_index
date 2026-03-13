@@ -75,7 +75,6 @@ class DataIndexer:
 
         # SNS Setup
         self.sns_topic = self.config.get("AWS_SNS_TOPIC")
-        self.sns_client = boto3.client("sns", region_name=getenv("AWS_DEFAULT_REGION", "us-east-1"))
 
     def parse_batch(self, event):
         """Parse SQS message data and group by object type and action.
@@ -156,7 +155,8 @@ class DataIndexer:
         Includes a count of indexed and deleted documents, and groups messages by object type.
         """
 
-        self.sns_client.publish(
+        client = boto3.client('sns', region_name=getenv('AWS_DEFAULT_REGION', 'us-east-1'))
+        client.publish(
             TopicArn=self.sns_topic,
             MessageGroupId=f'{SERVICE_NAME}-{object_type}',
             MessageDeduplicationId=f'{SERVICE_NAME}-{object_type}-success',
@@ -188,8 +188,9 @@ class DataIndexer:
         """Send message to an SNS topic when indexing fails for an object.
         """
 
+        client = boto3.client('sns', region_name=getenv('AWS_DEFAULT_REGION', 'us-east-1'))
         tb = ''.join(traceback.format_exception(exception)[:-1])
-        self.sns_client.publish(
+        client.publish(
             TopicArn=self.sns_topic,
             MessageGroupId=f'{SERVICE_NAME}-{es_id}',
             MessageDeduplicationId=f'{SERVICE_NAME}-{es_id}-failure',
