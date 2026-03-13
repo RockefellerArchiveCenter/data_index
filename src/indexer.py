@@ -227,7 +227,7 @@ def lambda_handler(event, context):
     object type and action, performs Elasticsearch indexing or deletion, and
     publishes success and failure notifications to SNS.
     """
-    
+
     logger.info("Message batch received")
     indexer = DataIndexer()
     grouped_actions = indexer.parse_batch(event)
