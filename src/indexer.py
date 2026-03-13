@@ -87,11 +87,6 @@ class DataIndexer:
         grouped = {}
 
         for record in event.get("Records", []):
-            try:
-                body = json.loads(record["body"])
-            except json.JSONDecodeError:
-                raise ValueError("Invalid JSON body")
-
             attributes = record.get("messageAttributes", {})
             requested_action = attributes.get("requested_action", {}).get("stringValue")
             es_id = attributes.get("es_id", {}).get("stringValue")
@@ -100,10 +95,22 @@ class DataIndexer:
             grouped.setdefault(object_type, {"add": [], "delete": []})
 
             if requested_action == "index":
-                grouped[object_type]["add"].append({"es_id": es_id, "data": body, "object_status": "updated"})
+                try:
+                    body = json.loads(record.get("body", "{}"))
+                except json.JSONDecodeError:
+                    raise ValueError("Invalid JSON body")
+
+                grouped[object_type]["add"].append({
+                    "es_id": es_id,
+                    "data": body,
+                    "object_status": "updated"
+                })
 
             elif requested_action == "delete":
-                grouped[object_type]["delete"].append({"es_id": es_id, "object_status": "deleted"})
+                grouped[object_type]["delete"].append({
+                    "es_id": es_id,
+                    "object_status": "deleted"
+                })
 
         return grouped
 

@@ -35,7 +35,6 @@ records = [
         }
     },
     {
-        "body": "{}",
         "messageAttributes": {
             "requested_action": {"stringValue": "delete"},
             "es_id": {"stringValue": "3"},
@@ -43,7 +42,6 @@ records = [
         }
     },
     {
-        "body": "{}",
         "messageAttributes": {
             "requested_action": {"stringValue": "delete"},
             "es_id": {"stringValue": "4"},
