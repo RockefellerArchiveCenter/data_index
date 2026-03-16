@@ -11,6 +11,7 @@ from src.indexer import DataIndexer, lambda_handler
 DEFAULT_CONFIG = {
     'ELASTICSEARCH_HOSTS': ['elasticsearch:9200'],
     'ELASTICSEARCH_INDEX': 'test-index',
+    'ELASTICSEARCH_API_KEY': 'test-api-key',
     'AWS_SNS_TOPIC': 'sns-topic',
 }
 
@@ -66,6 +67,15 @@ class DataIndexerInitTests(TestCase):
         mock_get_config.assert_called_once()
         self.assertEqual(indexer.sns_topic, DEFAULT_CONFIG['AWS_SNS_TOPIC'])
 
+        """Test that Elasticsearch connection is initialized with API key from config."""
+        mock_get_config.return_value['ELASTICSEARCH_API_KEY'] = 'test-api-key'
+        indexer = DataIndexer()
+        mock_create_connection.assert_called_with(
+            hosts=DEFAULT_CONFIG['ELASTICSEARCH_HOSTS'],
+            timeout=60,
+            api_key='test-api-key'
+        )
+
         """Test missing index error handling."""
         mock_index_cls.return_value.exists.return_value = False
         with self.assertRaises(RuntimeError):
@@ -99,7 +109,7 @@ class DataIndexerMethodTests(TestCase):
         return queue
 
     def test_parse_batch_groups_by_type_and_action(self):
-        """Records are grouped by object_type, with index actions in 'add' and delete actions in 'delete'."""
+        """Test that records are grouped by object_type, with index actions in 'add' and delete actions in 'delete'."""
 
         grouped = self.indexer.parse_batch({'Records': records})
 
@@ -137,7 +147,7 @@ class DataIndexerMethodTests(TestCase):
 
     @patch('src.indexer.BaseDescriptionComponent')
     def test_prepare_deletes_skips_missing(self, mock_base_component):
-        """Documents not found in the index are skipped when preparing deletes."""
+        """Test that documents not found in the index are skipped when preparing deletes."""
 
         from elasticsearch.exceptions import NotFoundError
 
