@@ -145,15 +145,28 @@ class DataIndexerMethodTests(TestCase):
         with self.assertRaises(ValueError):
             self.indexer.parse_batch({'Records': records})
 
+    def test_prepare_updates(self):
+        """Test that prepare_updates prepares the document with object data and calls prepare_streaming_dict with the es_id."""
+.
+        # MagicMock is used here so we can control the return value of prepare_streaming_dict
+        # without needing a real Elasticsearch connection.
+        doc = MagicMock()
+        doc.prepare_streaming_dict.return_value = {'_id': '1'}
+        doc_cls = MagicMock(return_value=doc)
+
+        index_objects = [{'es_id': '1', 'data': OBJECT_1, 'object_status': 'updated'}]
+        updates = list(self.indexer.prepare_updates(doc_cls, index_objects))
+
+        doc_cls.assert_called_once_with(**OBJECT_1)
+        doc.prepare_streaming_dict.assert_called_once_with('1')
+        self.assertEqual(updates, [{'_id': '1'}])
+
     @patch('src.indexer.BaseDescriptionComponent')
     def test_prepare_deletes_skips_missing(self, mock_base_component):
         """Test that documents not found in the index are skipped when preparing deletes."""
 
         from elasticsearch.exceptions import NotFoundError
 
-        # A fake Elasticsearch document standing in for a real BaseDescriptionComponent instance.
-        # MagicMock is used here so we can control the return value of prepare_streaming_dict
-        # without needing a real Elasticsearch connection.
         doc = MagicMock()
         doc.prepare_streaming_dict.return_value = {'_id': '3'}
         mock_base_component.get.side_effect = [doc, NotFoundError()]
