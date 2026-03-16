@@ -147,7 +147,7 @@ class DataIndexerMethodTests(TestCase):
 
     def test_prepare_updates(self):
         """Test that prepare_updates prepares the document with object data and calls prepare_streaming_dict with the es_id."""
-.
+
         # MagicMock is used here so we can control the return value of prepare_streaming_dict
         # without needing a real Elasticsearch connection.
         doc = MagicMock()
