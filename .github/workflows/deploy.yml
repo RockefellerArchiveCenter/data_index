@@ -13,7 +13,6 @@ jobs:
     environment:
       name: ${{ github.ref_name }}
 
-    # TODO: Check if this is correct, and if I also need env: APP_NAME here
     env:
       LAMBDA_NAME: data_index
       LAMBDA_HANDLER_CODE: src/data_index.py
