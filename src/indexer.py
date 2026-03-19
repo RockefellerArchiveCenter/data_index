@@ -25,6 +25,9 @@ OBJECT_TYPES = {
 SERVICE_NAME = 'data_index'
 FULL_CONFIG_PATH = f"/{getenv('ENV')}/{getenv('APP_CONFIG_PATH')}"
 
+# Default Elasticsearch timeout that is configurable
+TIMEOUT = int(getenv("ES_TIMEOUT", 60))
+
 
 def get_config(ssm_parameter_path):
     """Fetch config values from AWS Parameter Store by path."""
@@ -61,7 +64,7 @@ class DataIndexer:
 
         # Elasticsearch connection
         hosts = self.config['ELASTICSEARCH_HOSTS']
-        connection_args = {'hosts': hosts, 'timeout': 60}  # TODO: is this timeout still appropriate?
+        connection_args = {'hosts': hosts, 'timeout': TIMEOUT}
         if self.config.get('ELASTICSEARCH_API_KEY'):
             connection_args['api_key'] = self.config['ELASTICSEARCH_API_KEY']
         self.connection = connections.create_connection(**connection_args)
