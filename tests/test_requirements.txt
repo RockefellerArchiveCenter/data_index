@@ -1,0 +1,85 @@
+boto3==1.42.67
+    # via moto
+botocore==1.42.67
+    # via
+    #   boto3
+    #   moto
+    #   s3transfer
+certifi==2026.2.25
+    # via
+    #   elasticsearch
+    #   requests
+cffi==2.0.0
+    # via cryptography
+charset-normalizer==3.4.5
+    # via requests
+coverage==7.13.4
+    # via -r tests/test_requirements.in
+cryptography==46.0.5
+    # via moto
+elasticsearch==7.17.13
+    # via
+    #   -r tests/test_requirements.in
+    #   elasticsearch-dsl
+    #   rac-es
+elasticsearch-dsl==7.4.1
+    # via
+    #   -r tests/test_requirements.in
+    #   rac-es
+idna==3.11
+    # via requests
+iniconfig==2.3.0
+    # via pytest
+jinja2==3.1.6
+    # via moto
+jmespath==1.1.0
+    # via
+    #   boto3
+    #   botocore
+markupsafe==3.0.3
+    # via
+    #   jinja2
+    #   werkzeug
+moto==5.1.22
+    # via -r tests/test_requirements.in
+packaging==26.0
+    # via pytest
+pluggy==1.6.0
+    # via pytest
+pycparser==3.0
+    # via cffi
+pygments==2.19.2
+    # via pytest
+pytest==9.0.2
+    # via -r tests/test_requirements.in
+python-dateutil==2.9.0.post0
+    # via
+    #   botocore
+    #   elasticsearch-dsl
+    #   moto
+pyyaml==6.0.3
+    # via responses
+rac-es==1.1.0
+    # via -r tests/test_requirements.in
+requests==2.32.5
+    # via
+    #   moto
+    #   responses
+responses==0.26.0
+    # via moto
+s3transfer==0.16.0
+    # via boto3
+six==1.17.0
+    # via
+    #   elasticsearch-dsl
+    #   python-dateutil
+urllib3==2.6.3
+    # via
+    #   botocore
+    #   elasticsearch
+    #   requests
+    #   responses
+werkzeug==3.1.6
+    # via moto
+xmltodict==1.0.4
+    # via moto

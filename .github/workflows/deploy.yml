@@ -1,0 +1,55 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - base
+      - development
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: ${{ github.ref_name }}
+
+    env:
+      LAMBDA_NAME: data_index
+      LAMBDA_HANDLER_CODE: src/data_index.py
+      BASENAME: data_index.py
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install requirements
+        run: |
+            mkdir package
+            python -m pip install --upgrade pip
+            pip install --platform manylinux2014_x86_64 --only-binary=:all: -r requirements.txt --target ./package
+            cd package
+            zip -r ../${LAMBDA_NAME}.zip .
+            cd ..
+
+      - name: Make zip file
+        run: |
+          cp ${{ env.LAMBDA_HANDLER_CODE }} ${{ env.BASENAME }}
+          zip ${{ env.LAMBDA_NAME }}.zip ${{ env.BASENAME }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4.0.2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE }}
+          role-skip-session-tagging: true
+          role-duration-seconds: 900
+
+      - name: Upload file to S3
+        run: aws s3 cp ${{ env.LAMBDA_NAME }}.zip s3://${{ secrets.LAMBDA_BUCKET_NAME }}/${{ env.LAMBDA_NAME }}.zip
+
+      - name: Deploy lambda package
+        run: aws lambda update-function-code
+          --function-name arn:aws:lambda:${{ secrets.AWS_REGION }}:${{ secrets.AWS_LAMBDA_ACCOUNT_ID }}:function:${{ env.LAMBDA_NAME }}
+          --zip-file fileb://${{ env.LAMBDA_NAME }}.zip
