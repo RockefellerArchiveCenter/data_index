@@ -9,7 +9,7 @@ from moto.core import DEFAULT_ACCOUNT_ID
 from src.indexer import DataIndexer, lambda_handler
 
 DEFAULT_CONFIG = {
-    'ELASTICSEARCH_HOSTS': ['elasticsearch:9200'],
+    'ELASTICSEARCH_HOSTS': 'elasticsearch:9200',
     'ELASTICSEARCH_INDEX': 'test-index',
     'ELASTICSEARCH_API_KEY': 'test-api-key',
     'AWS_SNS_TOPIC': 'sns-topic',
