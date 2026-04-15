@@ -9,7 +9,7 @@ from moto.core import DEFAULT_ACCOUNT_ID
 from src.indexer import DataIndexer, lambda_handler
 
 DEFAULT_CONFIG = {
-    'ELASTICSEARCH_HOSTS': ['elasticsearch:9200'],
+    'ELASTICSEARCH_HOSTS': 'elasticsearch:9200',
     'ELASTICSEARCH_INDEX': 'test-index',
     'ELASTICSEARCH_API_KEY': 'test-api-key',
     'AWS_SNS_TOPIC': 'sns-topic',
@@ -71,7 +71,7 @@ class DataIndexerInitTests(TestCase):
         mock_get_config.return_value['ELASTICSEARCH_API_KEY'] = 'test-api-key'
         indexer = DataIndexer()
         mock_create_connection.assert_called_with(
-            hosts=DEFAULT_CONFIG['ELASTICSEARCH_HOSTS'],
+            hosts=DEFAULT_CONFIG['ELASTICSEARCH_HOSTS'].split(','),
             timeout=60,
             api_key='test-api-key'
         )

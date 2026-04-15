@@ -63,7 +63,7 @@ class DataIndexer:
         self.config = get_config(FULL_CONFIG_PATH)
 
         # Elasticsearch connection
-        hosts = self.config['ELASTICSEARCH_HOSTS']
+        hosts = self.config['ELASTICSEARCH_HOSTS'].split(',')
         connection_args = {'hosts': hosts, 'timeout': TIMEOUT}
         if self.config.get('ELASTICSEARCH_API_KEY'):
             connection_args['api_key'] = self.config['ELASTICSEARCH_API_KEY']
