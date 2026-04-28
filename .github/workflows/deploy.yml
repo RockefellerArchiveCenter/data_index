@@ -15,18 +15,18 @@ jobs:
 
     env:
       LAMBDA_NAME: data_index
-      LAMBDA_HANDLER_CODE: src/data_index.py
+      LAMBDA_HANDLER_CODE: src/indexer.py
       BASENAME: data_index.py
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
 
       - name: Install requirements
         run: |
             mkdir package
             python -m pip install --upgrade pip
-            pip install --platform manylinux2014_x86_64 --only-binary=:all: -r requirements.txt --target ./package
+            pip install -r requirements.txt --target ./package
             cd package
             zip -r ../${LAMBDA_NAME}.zip .
             cd ..
