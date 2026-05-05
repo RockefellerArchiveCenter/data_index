@@ -16,7 +16,7 @@ jobs:
     env:
       LAMBDA_NAME: data_index
       LAMBDA_HANDLER_CODE: src/indexer.py
-      BASENAME: data_index.py
+      BASENAME: indexer.py
 
     steps:
       - name: Checkout code
