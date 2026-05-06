@@ -122,7 +122,7 @@ class DataIndexer:
 
         for obj in objects:
             doc = doc_cls(**obj['data'])
-            yield doc.prepare_streaming_dict(obj['es_id'])
+            yield doc.prepare_streaming_dict(obj['es_id'].split("/")[-1])
 
     def prepare_deletes(self, id_list):
         """Prepare document IDs for bulk deletion via BaseDescriptionComponent.
