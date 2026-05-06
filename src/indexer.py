@@ -122,7 +122,6 @@ class DataIndexer:
 
         for obj in objects:
             doc = doc_cls(**obj['data'])
-            logging.info(doc)
             yield doc.prepare_streaming_dict(obj['es_id'])
 
     def prepare_deletes(self, id_list):
@@ -250,9 +249,7 @@ def lambda_handler(event, context):
         # Index each object individually by type to send failure per object
         for obj in actions['add']:
             try:
-                logging.info(obj)
                 result = indexer.add(object_type, [obj])
-                logging.info(result)
                 indexed_ids += result
             except Exception as e:
                 indexer.deliver_failure_notification(obj['es_id'], object_type, obj['object_status'], e)
@@ -267,3 +264,7 @@ def lambda_handler(event, context):
 
         # Notify success grouped by object_type
         indexer.deliver_success_notification(object_type, indexed_ids, deleted_ids)
+        if indexed_ids:
+            logging.info(f"Indexed: {indexed_ids}")
+        if deleted_ids:
+            logging.info(f"Deleted: {deleted_ids}")
