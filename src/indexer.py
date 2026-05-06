@@ -249,6 +249,7 @@ def lambda_handler(event, context):
         # Index each object individually by type to send failure per object
         for obj in actions['add']:
             try:
+                logging.info(obj)
                 result = indexer.add(object_type, [obj])
                 indexed_ids += result
             except Exception as e:
