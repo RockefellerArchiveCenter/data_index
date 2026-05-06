@@ -104,7 +104,7 @@ class DataIndexer:
                     raise ValueError('Invalid JSON body')
 
                 grouped[object_type]['add'].append({
-                    'es_id': es_id,
+                    'es_id': es_id.split("/")[-1],
                     'data': body,
                     'object_status': 'updated'
                 })
@@ -122,7 +122,8 @@ class DataIndexer:
 
         for obj in objects:
             doc = doc_cls(**obj['data'])
-            yield doc.prepare_streaming_dict(obj['es_id'].split("/")[-1])
+            logging.info(doc)
+            yield doc.prepare_streaming_dict(obj['es_id'])
 
     def prepare_deletes(self, id_list):
         """Prepare document IDs for bulk deletion via BaseDescriptionComponent.
@@ -251,6 +252,7 @@ def lambda_handler(event, context):
             try:
                 logging.info(obj)
                 result = indexer.add(object_type, [obj])
+                logging.info(result)
                 indexed_ids += result
             except Exception as e:
                 indexer.deliver_failure_notification(obj['es_id'], object_type, obj['object_status'], e)
