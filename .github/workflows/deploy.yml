@@ -3,15 +3,16 @@ name: Deploy
 on:
   push:
     branches:
-      - base
       - development
+  release:
+    types: [published]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     environment:
-      name: ${{ github.ref_name }}
+      name: ${{ github.event_name == 'release' && 'base' || github.ref_name }}
 
     env:
       LAMBDA_NAME: data_index
