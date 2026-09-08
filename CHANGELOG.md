@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/RockefellerArchiveCenter/data_index/compare/v1.0.2...v1.0.3) (2026-09-08)
+
+
+### Bug Fixes
+
+* **deps:** Scheduled dependency updates ([12fb81f](https://github.com/RockefellerArchiveCenter/data_index/commit/12fb81f319ce220f33361b1dbdf1d7fcc4c07571))
+
 ## [1.0.2](https://github.com/RockefellerArchiveCenter/data_index/compare/v1.0.1...v1.0.2) (2026-08-03)
 
 
