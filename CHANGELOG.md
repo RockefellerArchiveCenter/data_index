@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.5](https://github.com/RockefellerArchiveCenter/data_index/compare/v1.0.4...v1.0.5) (2026-10-21)
+
+
+### Bug Fixes
+
+* update pip and deps ([cf76aba](https://github.com/RockefellerArchiveCenter/data_index/commit/cf76aba0d74ece5a386206edc910a4107d1b411d))
+* update pip and deps ([cf76aba](https://github.com/RockefellerArchiveCenter/data_index/commit/cf76aba0d74ece5a386206edc910a4107d1b411d))
+* update pip and deps ([253b52c](https://github.com/RockefellerArchiveCenter/data_index/commit/253b52c0d65cfdbe153b6338a3c5fe7044ddb06c))
+* update pip and deps ([253b52c](https://github.com/RockefellerArchiveCenter/data_index/commit/253b52c0d65cfdbe153b6338a3c5fe7044ddb06c))
+* update pip and deps ([b1becf5](https://github.com/RockefellerArchiveCenter/data_index/commit/b1becf5f027cefb18867073c339a05fc90b704ec))
+
 ## [1.0.4](https://github.com/RockefellerArchiveCenter/data_index/compare/v1.0.3...v1.0.4) (2026-10-05)
 
 
