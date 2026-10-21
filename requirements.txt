@@ -1,10 +1,10 @@
-boto3==1.43.106
+boto3==1.43.117
     # via -r requirements.in
-botocore==1.43.106
+botocore==1.43.117
     # via
     #   boto3
     #   s3transfer
-certifi==2026.7.22
+certifi==2026.10.19
     # via elasticsearch
 elasticsearch==7.17.13
     # via
@@ -23,9 +23,9 @@ python-dateutil==2.9.0.post0
     # via
     #   botocore
     #   elasticsearch-dsl
-rac-es==1.1.5
+rac-es==1.1.6
     # via -r requirements.in
-s3transfer==0.19.2
+s3transfer==0.19.3
     # via boto3
 six==1.17.0
     # via
